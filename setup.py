@@ -66,5 +66,5 @@ setup(
     license='',
     author='User',
     author_email='',
-    description='', install_requires=['cv2', 'PIL', 'numpy']
+    description='', install_requires=['cv2', 'PIL', 'numpy', 'wx', 'pyWinhook']
 )

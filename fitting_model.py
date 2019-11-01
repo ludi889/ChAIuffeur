@@ -10,8 +10,8 @@ def fit_model():
     WIDTH = 136
     HEIGHT = 76
     LR = 1e-4
-    EPOCHS = 3
-    MODEL_NAME = 'WarcraftIII-learning_rate{}-epochs{}'.format(LR, EPOCHS)
+    EPOCHS = 2
+    MODEL_NAME = 'Model-learning_rate{}-epochs{}'.format(LR, EPOCHS)
     model = trainingmodel(WIDTH, HEIGHT, LR)
 
     # loading, processing data and saving preprocessed data
@@ -53,5 +53,6 @@ def fit_model():
     # fitting model
     model.fit({'input': X}, {'targets': Y}, n_epoch=EPOCHS, validation_set=({'input': test_x}, {'targets': test_y}),
               batch_size=500, shuffle=True, snapshot_step=500, show_metric=True, run_id=MODEL_NAME)
+    # saving model
     model.save(MODEL_NAME)
     print("Done")

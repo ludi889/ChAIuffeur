@@ -13,7 +13,6 @@ def prepare_encoder(vocabulary_set):
     encoder.save_to_file('encoder')
     return encoder
 
-
 # Preprocessing data
 def prepare_data(data):
     # acquring tokenizer, and tokenizing strings related to action made
@@ -24,7 +23,7 @@ def prepare_data(data):
     # if tokenizer isn't found, new token is created
     else:
         tokenizer = tfds.features.text.Tokenizer()
-        # saving tokenizer for scoring
+        # saving tokenizer for backu[
         with open('tokenizer.pickle', 'wb') as handle:
             pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
     vocabulary_set = set()
@@ -34,6 +33,8 @@ def prepare_data(data):
     for i in data:
         some_tokens = tokenizer.tokenize(i[1][1])
         vocabulary_set.update(some_tokens)
+    with open('vocabulary.pickle', 'wb') as handle:
+        pickle.dump(vocabulary_set, handle, protocol=pickle.HIGHEST_PROTOCOL)
     encoder = prepare_encoder(vocabulary_set)
     # saving
     for i in data:
@@ -42,7 +43,8 @@ def prepare_data(data):
         # getting screen position data from (x,y) tuple to [x,y] array
         screen = i[0]
         # token is a 1 element list with int as tokenized string value.
-        token = int(encoder.encode(i[1][1])[0])
+        token = encoder.encode(i[1][1])[0]
+        print(token)
         screen_position_tuple = i[1][0]
         x_value = screen_position_tuple[0]
         y_value = screen_position_tuple[1]

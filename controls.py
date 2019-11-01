@@ -1,25 +1,31 @@
-import pickle
-
 import pyautogui
+import tensorflow_datasets as tfds
 
 # this module is prepared for fitted model to make predicted actions
-# acquring tokenizer which has to be the same, as the one used in tokenizing data in data processing
 # TODO this probably can be reworked to dialog choice using TKinter, but I didn't find such need in my case
-# TODO It also has to be checked in practice because unfortunately I didn't make it to proper model state
+# TODO this has also to be checked in practice in terms of making actual actions
 
-tokenizer = pickle.load('tokenizer.pickle', 'rb')
+# loading encoder
+encoder = tfds.features.text.TokenTextEncoder.load_from_file('encoder')
 
 
 # action is taken based on x-y position of mouse and action predicted by model
 def make_action(position_x, position_y, action):
-    action = tokenizer.tokenize(action)
-    pyautogui.moveRel(position_x, position_y)
-    if action == 'mouse move':
+    # making array out of action - encoder require it for proper decoding
+    action_array = [action]
+    # decoding action coded in int by encoder to string of corresponding action
+    action = encoder.decode(action_array)
+    # moving mouse to position of action
+    pyautogui.moveTo(position_x, position_y)
+    # regarding action which has to be made
+    if action == 'move':
         pass
-    elif action == 'mouse left down':
+    elif action == 'left':
         pyautogui.leftClick()
-    elif action == 'mouse right down':
+    elif action == 'right':
         pyautogui.rightClick()
+    elif action == 'middle':
+        pyautogui.middleClick()
     elif 'bind' in action:
         number = action[-1]
         pyautogui.hotkey('shift', number)
@@ -28,3 +34,4 @@ def make_action(position_x, position_y, action):
         pyautogui.hotkey('ctrl', number)
     else:
         pyautogui.press(action)
+    print('Action {} was made on X-coordinate {} and Y-coordinate {}'.format(action, position_x, position_x))

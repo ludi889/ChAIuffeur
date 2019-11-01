@@ -5,12 +5,17 @@ import mss
 import numpy as np
 import pyWinhook as pyHook
 import pythoncom
+import wx
+
+# getting information about screen display resolution
+app = wx.App(False)
+screen_width, screen_height = wx.GetDisplaySize()
 
 
-# getting screenshot
+# getting screenshot, changing it colours to Grayscale and resizing it for more convenient size for CNN
 def get_screen():
     with mss.mss() as sct:
-        screen = np.array(sct.grab((0, 0, 1366, 768)))
+        screen = np.array(sct.grab((0, 0, screen_width, screen_height)))
     screen = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
     screen = cv2.resize(screen, (136, 76))
     return screen
@@ -52,12 +57,17 @@ def get_data():
             output[1] = 'left'
         elif action == 'mouse right down':
             output[1] = 'right'
+        elif action == 'mouse middle down':
+            output[1] = 'middle'
         save_data(screen, output)
         return True
 
     # getting inputs and screen on keyboard event
     def OnKeyboardEvent(event):
+        if event == 'Q':
+            input('Pause. Press Enter to continue')
         screen = get_screen()
+        # TODO a position of keyboard action could potentially be fixed if the specific position is needed
         output = [(1, 1), event.Key]
         # Getting special actions combinations with control and shift, for example binding units etc.
         ctrl_pressed = pyHook.GetKeyState(pyHook.HookConstants.VKeyToID('VK_CONTROL'))
@@ -80,6 +90,7 @@ def get_data():
     # watch for all mouse events
     hm.MouseLeftDown = OnMouseEvent
     hm.MouseRightDown = OnMouseEvent
+    hm.MouseMiddleDown = OnMouseEvent
     # MouseMove should be periodically disabled, because it's throttling other inputs
     hm.MouseMove = OnMouseEvent
     hm.KeyUp = OnKeyboardEvent
