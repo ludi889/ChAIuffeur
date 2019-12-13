@@ -2,6 +2,7 @@ import os
 import pickle
 
 import tensorflow_datasets as tfds
+from tflearn import data_utils
 
 
 # This module is prepared for preprocessing strings of data and screen position tuples for array of data,
@@ -12,6 +13,7 @@ def prepare_encoder(vocabulary_set):
     encoder = tfds.features.text.TokenTextEncoder(vocabulary_set)
     encoder.save_to_file('encoder')
     return encoder
+
 
 # Preprocessing data
 def prepare_data(data):
@@ -44,11 +46,18 @@ def prepare_data(data):
         screen = i[0]
         # token is a 1 element list with int as tokenized string value.
         token = encoder.encode(i[1][1])[0]
-        print(token)
         screen_position_tuple = i[1][0]
         x_value = screen_position_tuple[0]
         y_value = screen_position_tuple[1]
         # creating a row of preprocessed data and appending new array
         new_data = (screen, [x_value, y_value, token])
         data_copy.append(new_data)
+    a = []
+    for i in data_copy:
+        a.append(i[1][2])
+    data_utils.to_categorical(a, encoder.vocab_size)
+    index = 0
+    for i in data_copy:
+        i[1][2] = a[index]
+        index += 1
     return data_copy

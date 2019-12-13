@@ -1,6 +1,5 @@
 import os
 
-import cv2
 import mss
 import numpy as np
 import pyWinhook as pyHook
@@ -15,10 +14,11 @@ screen_width, screen_height = wx.GetDisplaySize()
 # getting screenshot, changing it colours to Grayscale and resizing it for more convenient size for CNN
 def get_screen():
     with mss.mss() as sct:
-        screen = np.array(sct.grab((0, 0, screen_width, screen_height)))
-    screen = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
-    screen = cv2.resize(screen, (136, 76))
-    return screen
+        screen = np.array(sct.grab(sct.monitors[1]))
+        screen = np.array(screen)
+        # TODO this option should be uncommented for model processing. Probably todo to let user choose it more comfortably
+        # screen = cv2.resize(screen,(256,256))
+        return screen
 
 
 def get_data():
@@ -29,7 +29,6 @@ def get_data():
     # deciding if previous file with data is saved. If yes, it is opened. If not it's created
     if os.path.isfile(file_name):
         print('File exists, loading previous data!')
-        print(os.path.realpath(file_name))
         training_data = list(np.load(file_name, allow_pickle=True))
         np.save(copy_file_name, training_data)
     else:
@@ -39,12 +38,9 @@ def get_data():
     # saving data after acquiring 2500 sets of inputs and screenshots
     def save_data(screen, output):
         training_data.append([screen, output])
-        if len(training_data) % 2500 == 0:
-            print(len(training_data))
+        if len(training_data) % 500 == 0:
             np.save(file_name, training_data)
         print("Frames taken: " + str(len(training_data)))
-        index = len(training_data) - 1
-        print(training_data[index])
 
     # getting inputs and screen on mouse event
     def OnMouseEvent(event):
@@ -88,14 +84,14 @@ def get_data():
     # create a hook manager
     hm = pyHook.HookManager()
     # watch for all mouse events
-    hm.MouseLeftDown = OnMouseEvent
-    hm.MouseRightDown = OnMouseEvent
-    hm.MouseMiddleDown = OnMouseEvent
+    # hm.MouseLeftDown = OnMouseEvent
+    # hm.MouseRightDown = OnMouseEvent
+    # hm.MouseMiddleDown = OnMouseEvent
     # MouseMove should be periodically disabled, because it's throttling other inputs
-    hm.MouseMove = OnMouseEvent
-    hm.KeyUp = OnKeyboardEvent
+    # hm.MouseMove = OnMouseEvent
+    hm.KeyDown = OnKeyboardEvent
     # set the hook
-    hm.HookMouse()
+    # hm.HookMouse()
     hm.HookKeyboard()
     # wait forever
     try:
