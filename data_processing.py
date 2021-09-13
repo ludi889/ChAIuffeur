@@ -1,7 +1,7 @@
 import os
 import pickle
 
-import tensorflow_datasets as tfds
+import tensorflow_text
 from tflearn import data_utils
 
 
@@ -9,34 +9,25 @@ from tflearn import data_utils
 # which can be actually used by TensorFlow
 
 # Preparing encoder
-def prepare_encoder(vocabulary_set):
-    encoder = tfds.features.text.TokenTextEncoder(vocabulary_set)
+def prepare_encoder(vocabulary_set,encoder):
+    encoder.tokenize(vocabulary_set)
     encoder.save_to_file('encoder')
     return encoder
 
 
 # Preprocessing data
 def prepare_data(data):
-    # acquring tokenizer, and tokenizing strings related to action made
+    # acquiring tokenizer, and tokenizing strings related to action made
     # TODO this probably can be reworked to dialog choice using TKinter, but I didn't find such need in my case
-    if os.path.isfile('tokenizer.pickle'):
-        with open('tokenizer.pickle', 'rb') as handle:
-            tokenizer = pickle.load(handle)
-    # if tokenizer isn't found, new token is created
-    else:
-        tokenizer = tfds.features.text.Tokenizer()
-        # saving tokenizer for backu[
-        with open('tokenizer.pickle', 'wb') as handle:
-            pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    tokenizer = tensorflow_text.WhitespaceTokenizer()
     vocabulary_set = set()
     # creating additional copy of data to resolve problems with IndexErrors exceptions
     data_copy = []
     # tokenizing actions from data sets and creating an vocabulary set
     for i in data:
+        print(i[1][1])
         some_tokens = tokenizer.tokenize(i[1][1])
         vocabulary_set.update(some_tokens)
-    with open('vocabulary.pickle', 'wb') as handle:
-        pickle.dump(vocabulary_set, handle, protocol=pickle.HIGHEST_PROTOCOL)
     encoder = prepare_encoder(vocabulary_set)
     # saving
     for i in data:

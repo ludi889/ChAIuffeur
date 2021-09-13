@@ -1,138 +1,154 @@
 import os
+import time
 
-import cv2
+import cv2.cv2 as cv2
 import numpy as np
 import pytesseract
-from imageai.Detection import ObjectDetection
+from pytesseract import Output
 
-import retinanet_configuration
 import reward
+from detector_setup import setup_detector
+
+non_agent_objects_coordinates = []
+possible_agents = []
+
+PYTESSERACT_PATH = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
+DATA_PATH = f'{os.getcwd()}\\data\\'
+
+# Threshold is a threshold of  of difference between columns/rows to stop clearing
+TRESHOLD = 35
 
 
 def sortSecond(val):
     return val[1]
 
 
+def look_for_tresh_column(erode):
+    to_delete = 0
+    for column in erode:
+        to_delete += 1
+        diff = abs((erode[0].mean() - column.mean()))
+        if diff > TRESHOLD or np.all(column == 0):
+            print(f'Diff to break is {diff}')
+            break
+    return to_delete
+
+
+def delete_black_borders(erode):
+    TRESH_TO_CLEAR = 0.2
+    # From top side
+    print(f'Top side fraction is {erode[0].tolist().count(0) / len(erode[0])}')
+    if (erode[0].tolist().count(0) / len(erode[0])) > TRESH_TO_CLEAR:
+        print('Clearing')
+        to_delete = look_for_tresh_column(erode)
+        erode_no_top = erode[to_delete:]
+    else:
+        erode_no_top = erode
+    '''
+    
+    '''
+    # From bottom side
+    erode_no_top = np.flipud(erode_no_top)
+    print(f'Bottom side fraction is {erode_no_top[0].tolist().count(0) / len(erode_no_top[0])}')
+    if (erode_no_top[0].tolist().count(0) / len(erode_no_top[0])) > TRESH_TO_CLEAR:
+        print('Clearing')
+        erode_flip = np.flipud(erode)
+        to_delete = look_for_tresh_column(erode_flip)
+        erode_no_top_no_bottom = erode_no_top[:-to_delete]
+    else:
+        erode_no_top_no_bottom = erode_no_top
+
+    # From left side
+    erode_no_top_no_bottom = erode_no_top_no_bottom.T
+    print(f'Left side fraction is {erode_no_top_no_bottom[0].tolist().count(0) / len(erode_no_top_no_bottom[0])}')
+    if (erode_no_top_no_bottom[0].tolist().count(0) / len(erode_no_top_no_bottom[0])) > TRESH_TO_CLEAR:
+        print('Clearing')
+        erode = erode.T
+        to_delete = look_for_tresh_column(erode)
+        erode_no_top_no_bottom_no_left = erode_no_top_no_bottom[:-to_delete]
+    else:
+        erode_no_top_no_bottom_no_left = erode_no_top_no_bottom
+
+    # From right side
+    erode_no_top_no_bottom_no_left = np.flipud(erode_no_top_no_bottom_no_left)
+    print(
+        f'Right side fraction is {erode_no_top_no_bottom_no_left[0].tolist().count(0) / len(erode_no_top_no_bottom_no_left[0])}')
+    if (erode_no_top_no_bottom_no_left[0].tolist().count(0) / len(erode_no_top_no_bottom_no_left[0])) > TRESH_TO_CLEAR:
+        print('Clearing')
+        erode = erode.T
+        erode_flip = np.flipud(erode)
+        to_delete = look_for_tresh_column(erode_flip)
+        erode_no_borders = erode_no_top_no_bottom_no_left[to_delete:]
+    else:
+        erode_no_borders = erode_no_top_no_bottom_no_left
+    erode_no_borders = np.rot90(erode_no_borders)
+    erode_no_borders = np.fliplr(erode_no_borders)
+    return erode_no_borders
+
+
+def get_current_speed(screen, box_points, index):
+    image_copy = screen.copy()
+    clock_coordinates = box_points
+    clock = image_copy[clock_coordinates[1] + 145:clock_coordinates[3] - 30,
+            clock_coordinates[0] + 85:clock_coordinates[2] - 70]
+    ## Working on image to get best results - heuristic like work'
+    # TODO get money for google vision
+    resized = cv2.resize(clock, (0, 0), fx=16, fy=16)
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    ret, tresh = cv2.threshold(gray, 70, 255, cv2.THRESH_BINARY)
+    erode = cv2.erode(tresh, (13, 13), iterations=3)
+    #erode = delete_black_borders(erode)
+    # cv2.imshow('noborders', noborders)
+    # cv2.waitKey()
+    speed = pytesseract.image_to_string(erode, lang='letsgodigital',
+                                        config='--psm 8 --oem 3 -c tessedit_char_whitelist=0123456789').strip()
+    noborders = cv2.putText(erode, speed, (00, 185), cv2.FONT_HERSHEY_SIMPLEX,
+                            1, (0, 0, 255), 5, cv2.LINE_AA)
+    cv2.imwrite(os.path.join(DATA_PATH + "cnt" + str(index) + ".jpg"), noborders)
+    if speed:
+        print(f'Speed is {speed} for {"cnt" + str(index) + ".jpg"}')
+        return speed
+    else:
+        print(f'Speed couldn\'t be read from image')
+
+
 def evaluate_model():
     paused = False
-    # model = retinanet_configuration.training_model()
-    # setting the model in rush - it's predicting action basing on given screenshot
     file_name = 'training_data.npy'
     training_data = list(np.load(file_name, allow_pickle=True))
     car_possible_objects = ['car', 'truck']
     # setting pytesseract
-    pytesseract.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
+    pytesseract.pytesseract.tesseract_cmd = PYTESSERACT_PATH
     # setting detector
-    detector = ObjectDetection()
-    detector.setModelTypeAsRetinaNet()
-    detector.setModelPath(
-        os.path.join(retinanet_configuration.execution_path.execution_path, "resnet50_coco_best_v2.0.1.h5"))
-    detector.loadModel()
-    # define the dictionary of digit segments so we can identify
-    # each digit on the thermostat
-    DIGITS_LOOKUP = {
-        (1, 1, 1, 0, 1, 1, 1): 0,
-        (0, 0, 1, 0, 0, 1, 0): 1,
-        (1, 0, 1, 1, 1, 0, 1): 2,
-        (1, 0, 1, 1, 0, 1, 1): 3,
-        (0, 1, 1, 1, 0, 1, 0): 4,
-        (1, 1, 0, 1, 0, 1, 1): 5,
-        (1, 1, 0, 1, 1, 1, 1): 6,
-        (1, 0, 1, 0, 0, 1, 0): 7,
-        (1, 1, 1, 1, 1, 1, 1): 8,
-        (1, 1, 1, 1, 0, 1, 1): 9
-    }
+    detector = setup_detector()
 
     # while True:
     if not paused:
         # 1366 x 768 resolution
         # screen = get_screen()
         for index, i in enumerate(training_data):
-            non_agent_objects_coordinates = []
-            possible_agents = []
+            speed = None
             screen = i[0]
+            # print(type(screen))
             filename = "imagenew" + str(index) + ".jpg"
             predictions = detector.detectObjectsFromImage(input_image=screen, input_type="array",
-                                                          output_image_path=os.path.join(
-                                                              retinanet_configuration.execution_path.execution_path,
-                                                              filename), minimum_percentage_probability=50)
-            current_speed = []
-            for ind in predictions:
-                object_type = ind.get('name')
-                box_points = ind.get('box_points')
+                                                          output_image_path=os.path.join(DATA_PATH, filename),
+                                                          minimum_percentage_probability=50)
+            for prediction in predictions:
+                object_type = prediction.get('name')
+                box_points = prediction.get('box_points')
                 # if object is clock get speed from clock
                 if object_type == 'clock':
-                    image_copy = screen.copy()
-                    clock_coordinates = box_points
-                    # clock = image_copy[clock_coordinates[1] + 135:clock_coordinates[3] - 60,
-                    #        clock_coordinates[0] + 70:clock_coordinates[2] - 70]
-                    clock = image_copy[clock_coordinates[1] + 135:clock_coordinates[3] - 50,
-                            clock_coordinates[0] + 65:clock_coordinates[2] - 65]
-                    kernel = np.ones((3, 3), np.uint8)
-                    clock = cv2.cvtColor(clock, cv2.COLOR_BGR2GRAY)
-                    ret, clock = cv2.threshold(clock, 85, 255, cv2.THRESH_BINARY)
-                    clock = cv2.erode(clock, kernel, iterations=1)
-                    # find the contours in the mask
-                    cnts, hierarchy = cv2.findContours(clock.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-                    digits = []
-                    for c in cnts:
-                        if 200 < cv2.contourArea(c) < 1500:
-                            # extract the digit ROI
-
-                            (x, y, w, h) = cv2.boundingRect(c)
-                            roi = clock[y:y + h, x:x + w]
-                            print(cv2.contourArea(c))
-                            # compute the width and height of each of the 7 segments
-                            # we are going to examine
-                            # (roiH, roiW) = roi.shape
-                            # (dW, dH) = (int(roiW * 0.15), int(roiH * 0.05))
-                            # dHC = int(roiH * 0.05)
-                            # define the set of 7 segments
-                            segments = [
-                                ((1, 2), (20, 3)),  # top
-                                ((3, 2), (4, 17)),  # top-left
-                                ((17, 2), (18, 17)),  # top-right
-                                ((0, 15,), (22, 16)),  # center
-                                ((3, 17), (4, 34)),  # bottom-left
-                                ((17, 17), (18, 34)),  # bottom-right
-                                ((2, 30), (22, 31))  # bottom
-                            ]
-                            on = [0] * len(segments)
-                            # loop over the segments
-                            for (indexnext, ((xA, yA), (xB, yB))) in enumerate(segments):
-                                area = (xB - xA) * (yB - yA)
-                                # cv2.line(roi, (xA, yA), (xB, yB), (255, 255, 255), 1)
-                                # extract the segment ROI, count the total number of
-                                # thresholded pixels in the segment, and then compute
-                                # the area of the segment
-                                segROI = roi[yA:yB, xA:xB]
-                                areah, areaw = segROI.shape
-                                total = (areah * areaw) - cv2.countNonZero(segROI)
-                                # if the total number of non-zero pixels is greater than
-                                # 50% of the area, mark the segment as "on"
-                                if total / float(area) > 0.65:
-                                    on[indexnext] = 1
-                                # lookup the digit and draw it on the image
-                            try:
-                                # between 220 and 230 is the area of digit 1
-                                if 220 < cv2.contourArea(c) < 230:
-                                    on = [0, 0, 1, 0, 0, 1, 0]
-                                digit = DIGITS_LOOKUP[tuple(on)]
-                                current_speed.append(digit)
-                                cv2.rectangle(clock, (x, y), (x + w, y + h), (0, 0, 0), 1)
-                                cv2.putText(clock, str(digit), (x + 7, y + 40), cv2.FONT_HERSHEY_SIMPLEX, 1,
-                                            (255, 255, 255), 2)
-                            except KeyError:
-                                pass
-                        else:
-                            pass
-                    cv2.imwrite("cnt" + str(index) + ".jpg", clock)
+                    try:
+                        speed = get_current_speed(screen, box_points, index)
+                    except (IndexError, SystemError):
+                        continue
                 center_x = box_points[2] - box_points[0]
                 center_y = box_points[3] - box_points[1]
                 if object_type not in car_possible_objects:
                     non_agent_objects_coordinates.append((center_x, center_y))
                 else:
-                    probability = ind.get('percentage_probability')
+                    probability = prediction.get('percentage_probability')
                     possible_agents.append([(center_x, center_x), probability])
             if not possible_agents:
                 pass
@@ -145,5 +161,11 @@ def evaluate_model():
                     xa, ya = agent_coordinates
                     xo, yo = object_coordinates
                     dist = int(np.math.sqrt((xo - xa) ** 2 + (yo - ya) ** 2))
-                    current_speed = ''.join(str(digit) for digit in current_speed)
-                    reward.reward_function(dist, current_speed)
+                    reward.reward_function(dist, speed)
+
+
+if __name__ == '__main__':
+    start = time.time()
+    evaluate_model()
+    end = time.time()
+    print(f'Elapsed time is {end - start}')
